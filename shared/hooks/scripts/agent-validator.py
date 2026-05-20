@@ -442,7 +442,7 @@ class AgentScriptValidator:
                     self.warnings.append((i, "WARN",
                         f"Topic '{match.group(1)}' looks like a redundant router (line {i}) — "
                         f"in router-first architecture, start_agent IS the router. "
-                        f"Remove this topic and have spokes transition to @topic.topic_selector instead."))
+                        f"Remove this topic and have subagents transition to @subagent.agent_router instead."))
 
     def _auto_resolve_placeholder(self):
         """Auto-resolve REPLACE_WITH_EINSTEIN_AGENT_USER placeholder."""
