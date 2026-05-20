@@ -68,6 +68,10 @@ agent, extract the same answers from `.agent` and project files.
 
 **Resolve as many questions as possible from available context before asking the human.** Scan existing code, project metadata, prior conversation, and any provided requirements. Only surface questions the human must answer — never forward this list verbatim.
 
+Default new actions to placeholders (`NEEDS STUB`) during planning. Reuse/generate
+implementation work is an explicit user choice. Follow the execution policy in
+`SKILL.md` for when to scan existing implementations or generate new ones.
+
 ### Agent Identity & Purpose *(feeds Purpose & Scope)*
 
 - What is the agent's name? (no spaces, letters/numbers/underscores only)

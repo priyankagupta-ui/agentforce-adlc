@@ -67,6 +67,11 @@ Identify user intent from task descriptions. ALWAYS read indicated reference fil
    regulation/trust gates or observed failures. For detailed posture rules, see
    [Posture & Determinism](references/posture-and-determinism.md).
 
+8. **Action implementation is a user decision.** During planning/spec work,
+   default new actions to `NEEDS STUB` placeholders. Always ask the user whether
+   they want to scan org/project for existing implementations and/or generate
+   new Apex/Flow/Prompt implementations before taking either path.
+
 ## Task Domains
 
 Every task domain below has **Required Steps**. Follow verbatim, in order. The default path is: design -> draft implementation loop -> validation/preview loop -> explicit user-approved release.
@@ -79,7 +84,11 @@ User wants to build new agent from scratch. ALWAYS use Agent Script. Work with U
 
 Read [CLI for Agents](references/salesforce-cli-for-agents.md) for exact command syntax.
 
-1. **Design** — Read [Design & Agent Spec](references/agent-design-and-spec-creation.md) to draft an Agent Spec. Always ask if you should scan for existing actions and implementations. Unless instructed otherwise, scan by reading `sfdx-project.json` to identify package directories, then search each for `@InvocableMethod` in `classes/`, `AutoLaunchedFlow` in `flows/`, and template metadata in `promptTemplates/`. Mark matches `EXISTS`; unmatched actions `NEEDS STUB`. Also scan `objects/` for `.object-meta.xml` to discover custom objects — related objects often contain data the agent should expose even when not mentioned in the prompt.
+1. **Design** — Read [Design & Agent Spec](references/agent-design-and-spec-creation.md) to draft an Agent Spec. Default all new actions to `NEEDS STUB` placeholders during planning. Ask the user which implementation path they want before implementation work:
+   - Path A: Keep placeholders only (no implementation now)
+   - Path B: Scan for existing implementations to reuse
+   - Path C: Generate new implementations
+   Only run scans (reading `sfdx-project.json`, searching `@InvocableMethod`, `AutoLaunchedFlow`, prompt templates, and custom objects) if the user explicitly chooses Path B or C.
    **If the agent's purpose involves answering from documents** (e.g., "answer customer questions from our product manual", "respond based on a policy guide", "FAQ from a PDF"), ask the user: *"Will this agent answer questions from a document corpus (PDF/DOCX/TXT)? If so, what file path?"* Capture the path in the Spec under a **"Knowledge Grounding"** section. Asking now — during requirements capture — is critical: ADL indexing takes minutes, so we want the file path captured pre-Spec-approval and provisioning kicked off as early as possible.
    **Always save Agent Spec as file.**
 2. **STOP for user approval of Agent Spec.** Present to user (including the Knowledge Grounding section if present). Ask for approval or feedback. **Do not proceed** without approval. Once approved, proceed without stopping unless a step fails.
@@ -94,7 +103,7 @@ Read [CLI for Agents](references/salesforce-cli-for-agents.md) for exact command
 6. **Validate compilation** —
    `sf agent validate authoring-bundle --json --api-name <Developer_Name>`
    If validation fails, read [Validation & Debugging](references/agent-validation-and-debugging.md) to diagnose and fix, then re-validate. ALWAYS fix syntax and structural errors before generating action implementations.
-7. **Generate action implementations** — For each action marked NEEDS STUB:
+7. **Generate action implementations (explicit user-requested path only)** — Only run this step if the user explicitly asked to generate new implementations (Path C in Step 1). For each action marked NEEDS STUB:
    `sf template generate apex class --name <ClassName> --output-dir <PACKAGE_DIR>/main/default/classes`
    Replace class body with invocable pattern from [Design & Agent Spec](references/agent-design-and-spec-creation.md). ALWAYS deploy:
    `sf project deploy start --json --metadata ApexClass:<ClassName>`
@@ -198,7 +207,11 @@ User wants to add, remove, or change subagents, actions, instructions, or flow c
 Read [CLI for Agents](references/salesforce-cli-for-agents.md) for exact command syntax.
 
 1. **Comprehend** — If no Agent Spec exists, reverse-engineer first by following "Comprehend an Existing Agent" workflow above.
-2. **Update Agent Spec** — Read [Design & Agent Spec](references/agent-design-and-spec-creation.md) for flow control patterns and action implementation analysis. Modify Agent Spec to reflect intended changes. For new actions, always ask if you should scan for existing actions and implementations. Unless instructed otherwise, scan by reading `sfdx-project.json` to identify package directories, then search each for `@InvocableMethod` in `classes/`, `AutoLaunchedFlow` in `flows/`, and template metadata in `promptTemplates/`. Mark matches `EXISTS`; unmatched actions `NEEDS STUB`.
+2. **Update Agent Spec** — Read [Design & Agent Spec](references/agent-design-and-spec-creation.md) for flow control patterns and action implementation analysis. Modify Agent Spec to reflect intended changes. Default new actions to `NEEDS STUB` placeholders. Ask the user which implementation path they want:
+   - Path A: Keep placeholders only
+   - Path B: Scan for existing implementations
+   - Path C: Generate new implementations
+   Only run scans if the user explicitly chooses Path B or C.
    **If the modification involves adding, replacing, or removing knowledge grounding**, ask: *"Will this agent answer questions from a document corpus (PDF/DOCX/TXT)? If so, what file path?"* Capture the path in the updated Spec under a **"Knowledge Grounding"** section. Asking now — during Spec update — surfaces ADL changes for the user's approval and lets us kick off provisioning right after.
    **Always save updated Agent Spec as file.**
 3. **STOP for user approval of updated Agent Spec.** Present to user (including the Knowledge Grounding section if present). Ask for approval or feedback. **Do not proceed** without approval. Once approved, proceed without stopping unless a step fails.
@@ -210,7 +223,7 @@ Read [CLI for Agents](references/salesforce-cli-for-agents.md) for exact command
 6. **Validate compilation** —
    `sf agent validate authoring-bundle --json --api-name <Developer_Name>`
    If validation fails, read [Validation & Debugging](references/agent-validation-and-debugging.md) to diagnose and fix, then re-validate.
-7. **Generate new action implementations** — For each new action marked NEEDS STUB:
+7. **Generate new action implementations (explicit user-requested path only)** — Only run this step if the user explicitly asked to generate new implementations (Path C in Step 2). For each new action marked NEEDS STUB:
    `sf template generate apex class --name <ClassName> --output-dir <PACKAGE_DIR>/main/default/classes`
    Replace class body with invocable pattern from [Design & Agent Spec](references/agent-design-and-spec-creation.md). ALWAYS deploy:
    `sf project deploy start --json --metadata ApexClass:<ClassName>`
