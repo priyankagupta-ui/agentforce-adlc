@@ -553,7 +553,16 @@ Check readiness via the detail endpoint:
 sf agent adl get -i "$LIBRARY_ID" --target-org "$TARGET_ORG" --json
 ```
 
-Once `result.retrieverId` is non-null, the library is ready: `rag_feature_config_id = "ARFPC_" + LIBRARY_ID`
+Once `result.retrieverId` is non-null, the pipeline is set up: `rag_feature_config_id = "ARFPC_" + LIBRARY_ID`
+
+**IMPORTANT — KNOWLEDGE Day 0 race condition (W-22773383):** The library may show READY with `retrieverId` populated but have 0 chunks. This happens because the Day 0 chunking job runs before the CRM Connector's data commit propagates through the lakehouse (~17s visibility window). The chunking job sees 0 rows, skips processing, and emits READY anyway.
+
+**Do NOT declare success based on `retrieverId` alone for KNOWLEDGE.** After `retrieverId` is populated:
+1. Wait ~10 minutes (chunking jobs run on ~10 min intervals)
+2. Send a test grounded query to verify non-empty `knowledgeSummary`
+3. If still empty after 10 min, try `sf agent adl update -i "$LIBRARY_ID" --content-fields "<fields>"` to force a re-index
+
+Unlike SFDRIVE (which uses JIT indexing and serves immediately), KNOWLEDGE chunking is asynchronous and may lag behind the READY status.
 
 ### Step K3 (Day-2) — Update Knowledge config
 

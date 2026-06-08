@@ -26,7 +26,7 @@ The ADLC `/developing-agentforce` skill assumes the org is already configured fo
 
 1. **Always `--json`.** ALWAYS include `--json` on EVERY `sf` CLI command. Read the full JSON response directly.
 
-2. **Verify target org.** Before any org interaction, run `sf config get target-org --json` to confirm a target org is set. If none configured, ask the user to set one with `sf config set target-org <alias>`.
+2. **Verify target org.** Before any org interaction, run `sf config get target-org --json` to confirm a target org is set. If none configured, ask the user to set one with `sf config set target-org <alias> --global` (the `--global` flag is required when not inside an SFDX project directory).
 
 3. **Stop on auth failure.** If org authentication fails, do NOT proceed. Ask the user to re-authenticate.
 
@@ -93,6 +93,8 @@ If licenses are missing, STOP and inform the user. These must be provisioned at 
 
 The org needs Einstein and Agentforce platform features turned on, and the admin user needs permission sets assigned BEFORE they can access Data Cloud or Agentforce.
 
+**Temp directory for deploys:** Commands below use `/tmp/adl-setup/` as a temp workspace. On Windows, substitute with `%TEMP%\adl-setup\` (cmd) or `$env:TEMP/adl-setup` (PowerShell). The key requirement is that `sfdx-project.json` must exist in the same directory tree, and `sf project deploy start` must run from within that directory.
+
 ### 0a. Enable Einstein GPT Platform
 
 Deploy the EinsteinGpt settings to turn on Einstein:
@@ -109,8 +111,10 @@ EOF
 cat > /tmp/adl-setup/sfdx-project.json << 'EOF'
 {"packageDirectories":[{"path":"main/default","default":true}],"namespace":"","sourceApiVersion":"67.0"}
 EOF
-sf project deploy start --source-dir /tmp/adl-setup/main/default/settings/EinsteinGpt.settings-meta.xml --target-org $TARGET_ORG --json
+cd /tmp/adl-setup && sf project deploy start --source-dir main/default/settings/EinsteinGpt.settings-meta.xml --target-org $TARGET_ORG --json
 ```
+
+**IMPORTANT:** `sf project deploy start` must run from within a directory that has `sfdx-project.json`. Always `cd` into the temp directory before deploying.
 
 If this fails with "object does not exist," the org may not have the `EinsteinGPTCopilotAddOn` license. STOP and inform the user.
 
@@ -125,7 +129,7 @@ cat > /tmp/adl-setup/main/default/settings/EinsteinCopilot.settings-meta.xml << 
     <enableEinsteinGptCopilot>true</enableEinsteinGptCopilot>
 </EinsteinCopilotSettings>
 EOF
-sf project deploy start --source-dir /tmp/adl-setup/main/default/settings/EinsteinCopilot.settings-meta.xml --target-org $TARGET_ORG --json
+cd /tmp/adl-setup && sf project deploy start --source-dir main/default/settings/EinsteinCopilot.settings-meta.xml --target-org $TARGET_ORG --json
 ```
 
 If this fails, the org may not have the Agentforce license (`EinsteinGPTCopilotAddOn`). STOP and inform the user.
@@ -133,10 +137,12 @@ If this fails, the org may not have the Agentforce license (`EinsteinGPTCopilotA
 ### 0c. Find required permission sets
 
 ```bash
-sf data query --target-org $TARGET_ORG --json -q "SELECT Id, Name, Label FROM PermissionSet WHERE Name IN ('DataCloudArchitect', 'CopilotSalesforceAdmin') ORDER BY Name"
+sf data query --target-org $TARGET_ORG --json -q "SELECT Id, Name, Label FROM PermissionSet WHERE Name IN ('GenieAdmin', 'CopilotSalesforceAdmin') ORDER BY Name"
 ```
 
-Note: `CopilotSalesforceAdmin` is also known as "Agentforce Default Admin" in the UI. This permset grants access to the agent APIs and Agentforce Studio.
+Note:
+- `GenieAdmin` has Label "Data Cloud Architect" in the UI (do NOT query by `Name = 'DataCloudArchitect'` — that doesn't exist)
+- `CopilotSalesforceAdmin` has Label "Agentforce Default Admin" in the UI
 
 **Optional:** `PromptTemplateManager` / `PromptTemplatePermSet` is only needed for Prompt Builder UI access. It is NOT required for ADL knowledge grounding — preview, publish, and runtime all work without it.
 
@@ -370,17 +376,25 @@ Replace `<orgId>` with the org's 18-character ID (from `sf org display`). The us
 
 **IMPORTANT:** `default_agent_user` is required in the `.agent` file even for "employee" agents when using `AnswerQuestionsWithKnowledge` with `--use-live-actions`. The platform treats any agent using the knowledge action as requiring an Einstein Agent User context at runtime.
 
-### 6b. Assign Data Cloud permission set
+### 6b. Assign required permission sets to agent user
+
+The agent user needs THREE permsets for knowledge grounding to work at preview/runtime:
 
 ```bash
-sf data query --target-org $TARGET_ORG --json -q "SELECT Id, Name FROM PermissionSet WHERE Name = 'GenieUserEnhancedSecurity'"
+sf data query --target-org $TARGET_ORG --json -q "SELECT Id, Name, Label FROM PermissionSet WHERE Name IN ('GenieUserEnhancedSecurity', 'AgentforceServiceAgentUser') ORDER BY Name"
 ```
 
-Then assign:
+Assign both:
 
 ```bash
-sf data create record --sobject PermissionSetAssignment --values "AssigneeId='<agentUserId>' PermissionSetId='<permsetId>'" --target-org $TARGET_ORG --json
+# Data Cloud access (retriever queries)
+sf data create record --sobject PermissionSetAssignment --values "AssigneeId='<agentUserId>' PermissionSetId='<GenieUserEnhancedSecurityId>'" --target-org $TARGET_ORG --json
+
+# Agent runtime access (required for preview sessions)
+sf data create record --sobject PermissionSetAssignment --values "AssigneeId='<agentUserId>' PermissionSetId='<AgentforceServiceAgentUserId>'" --target-org $TARGET_ORG --json
 ```
+
+Without `AgentforceServiceAgentUser`, preview returns "Unable to access the Salesforce Agent APIs" even when all other permissions are correct.
 
 ### 6c. Assign Knowledge FLS permission set
 
@@ -410,7 +424,7 @@ cat > /tmp/adl-setup/main/default/permissionsets/KnowledgeAgentAccess.permission
     </objectPermissions>
 </PermissionSet>
 EOF
-sf project deploy start --source-dir /tmp/adl-setup/main/default/permissionsets --target-org $TARGET_ORG --json
+cd /tmp/adl-setup && sf project deploy start --source-dir main/default/permissionsets --target-org $TARGET_ORG --json
 ```
 
 Then assign to the agent user:
@@ -494,6 +508,7 @@ After completing all steps, verify the full setup:
 - **Language filter (W-21956266)**: Retriever filters chunks by language. Even minor locale variants (en_US vs en_GB) cause zero results. Always verify alignment.
 - **Knowledge FLS for Einstein Agent User**: Raw field-level permissions are silently stripped by the platform for the Einstein Agent license. The correct fix is `AllowViewKnowledge` user permission + `viewAllRecords: true` on Knowledge__kav. Do NOT attempt individual field grants.
 - **CRM Connector**: Auto-activates when Data Cloud provisioning completes. No manual step needed on fresh orgs. Only check manually if DC provisioning completed but Knowledge indexing fails.
+- **Intermittent DNS failures for api.salesforce.com**: The SF CLI's Node.js process (with @mswjs/interceptors) can intermittently fail DNS for `api.salesforce.com`. If `sf agent preview start` alternates between ENOTFOUND and 404 "Unable to access Agent APIs" — retry. The underlying DNS works (verifiable with `nslookup`), it's an MSW interception issue. Set `SF_DISABLE_MSW=1` if using a linked plugin.
 - **Data Cloud provisioning time**: First-time DC provisioning can take 30 min – 2 hours. The skill cannot speed this up.
 - **SFDRIVE doesn't need Knowledge**: Steps 1-4 (Knowledge enablement) are only required for KNOWLEDGE source type. SFDRIVE and RETRIEVER only need Data Cloud (Step 5) and agent user setup (Step 6).
 - **default_agent_user required for knowledge agents**: Even "employee" type agents require `default_agent_user` in the `.agent` file when using `AnswerQuestionsWithKnowledge` with live actions. The platform treats it as needing an Einstein Agent User context at runtime.
