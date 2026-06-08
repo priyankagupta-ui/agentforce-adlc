@@ -4,10 +4,32 @@ How to provision an Agentforce Data Library (ADL) and wire it into an Agent Scri
 
 This reference is consumed by the **Create an Agent** and **Modify an Existing Agent** workflows in `SKILL.md`. The parent skill decides *whether* to provision an ADL (by asking the user); this file owns *how*.
 
+## CRITICAL — CLI Only
+
+**NEVER use raw Connect API calls** (`/services/data/v67.0/einstein/data-libraries`, `curl`, REST endpoints). ALL ADL operations MUST use `sf agent adl` CLI commands:
+- `sf agent adl create` — NOT `POST /einstein/data-libraries`
+- `sf agent adl upload` — NOT presigned URL + S3 PUT
+- `sf agent adl get` / `sf agent adl status` — NOT `GET /einstein/data-libraries/<id>`
+- `sf agent adl update` — NOT `PATCH /einstein/data-libraries/<id>`
+- `sf agent adl list` — NOT `GET /einstein/data-libraries`
+
+The CLI handles authentication, API version negotiation, polling, and error formatting. Raw API calls bypass all of this and will break.
+
+## Org setup prerequisite
+
+If the org is fresh (just licensed, not yet configured), read [Org Setup for ADL](org-setup-for-adl.md) FIRST. That reference handles:
+- Enabling Einstein GPT Platform + Agentforce (settings deploy)
+- Admin user permsets (Data Cloud Architect, Prompt Template Manager, CopilotSalesforceAdmin)
+- Lightning Knowledge enablement
+- Data Cloud verification + CRM Connector
+- Einstein Agent User creation + permissions (AllowViewKnowledge + viewAllRecords)
+
+If Step 0 below fails, the org likely hasn't been set up yet — go to [Org Setup for ADL](org-setup-for-adl.md).
+
 ## What this reference covers
 
 - **Step 0** — Verify Data Cloud is provisioned. ADL has a hard dependency on Data Cloud.
-- **Part A: SFDRIVE (File Library)** — Steps 1–7: Create library, upload file via presigned S3 URL, trigger indexing, poll until ready. Step 8: Day-2 add more files.
+- **Part A: SFDRIVE (File Library)** — Steps 1–7: Create library, upload file, trigger indexing, poll until ready. Step 8: Day-2 add more files.
 - **Part B: KNOWLEDGE (Knowledge Article Library)** — Create library with knowledgeConfig, trigger indexing, poll until ready. Day-2: update config fields.
 - **Part C: RETRIEVER (Custom Retriever Library)** — Create library with active retrieverId, immediately ready.
 - **Wiring the ADL into Agent Script** — the `knowledge:` block + `AnswerQuestionsWithKnowledge` action (same for all source types).
@@ -23,6 +45,11 @@ Ask the user which grounding source they want:
 | **RETRIEVER** | User has an existing active Custom Retriever | Create → Immediately READY (no provisioning) |
 
 If the user says "knowledge base" or "FAQ articles" → KNOWLEDGE. If they say "upload files" or "documents" → SFDRIVE. If they say "I have a retriever" or "custom search" → RETRIEVER.
+
+**When intent is ambiguous, ASK — do not guess.** Common ambiguous cases:
+- "knowledge-grounded agent from a PDF" — could be SFDRIVE (upload PDF directly) or KNOWLEDGE (extract content into articles, then ground on those). Ask which approach the user wants.
+- "add knowledge to my agent" — generic word "knowledge" doesn't indicate source type. Ask.
+- File path + "knowledge" in the same request — the file could be the grounding source (SFDRIVE) or input for creating articles (KNOWLEDGE). Ask.
 
 ## Outputs the parent skill consumes
 
@@ -75,7 +102,7 @@ sf data query --target-org "$TARGET_ORG" --json -q "SELECT COUNT() FROM DataKnow
 - Returns without error (any `totalSize`, including 0) → ✅ Data Cloud is provisioned. Continue to 0b.
 - `INVALID_TYPE` error → ❌ Data Cloud is NOT provisioned. Skip 0b and **STOP** with the A/B prompt below.
 
-> **Why `DataKnowledgeSpace` and not `DataStream__dlm`:** `DataKnowledgeSpace` is the exact object the ADL pipeline depends on, and is queryable as soon as DC provisioning completes. `DataStream__dlm` only materializes after a user creates a data stream — querying it yields `INVALID_TYPE` even on fully-provisioned orgs that have never run a stream, so it produces a false-negative on healthy DC orgs. (Pattern adopted from `codey-cko2/.claude/skills/setting-up-help-agent/SKILL.md`.)
+> **Why `DataKnowledgeSpace` and not `DataStream__dlm`:** `DataKnowledgeSpace` is the exact object the ADL pipeline depends on, and is queryable as soon as DC provisioning completes. `DataStream__dlm` only materializes after a user creates a data stream — querying it yields `INVALID_TYPE` even on fully-provisioned orgs that have never run a stream, so it produces a false-negative on healthy DC orgs.
 
 ### 0b. ADL service health check — `sf agent adl list`
 
@@ -86,7 +113,10 @@ sf agent adl list --target-org "$TARGET_ORG" --json
 ```
 
 - **`status: 0`** (success) → ✅ ADL service is healthy. The response includes `result.libraries[]` — useful for reuse if a matching `developerName` is already provisioned. Continue to Step 1.
-- **Error with `"This feature is not currently enabled"`** → ⚠️ ADL not enabled on this org. Show the A/B prompt below.
+- **Error with `"This feature is not currently enabled"`** → ⚠️ The ADL API checks both org-level and user-level access:
+    - **User-level:** Logged-in user needs ONE of: `CustomizeApplication` (System Admin), `EinsteinCopilotBuilder`, `EinsteinAgentPlatformBuilder`, or `SelfServiceCopilotBuilder`. The `CopilotSalesforceAdmin` permset grants these.
+    - **Org-level:** Org needs `EinsteinKnowledgeConfig` org perm AND the ADL Connect API gate enabled.
+    - **Fix:** First check if admin user has `CopilotSalesforceAdmin` permset (see [Org Setup for ADL](org-setup-for-adl.md), Step 0). If assigned and error persists, the org is missing the ADL feature gate — show the A/B prompt below.
 - **Error with `"INTERNAL_ERROR"`** → ⚠️ DC is provisioned but the ADL service is unhealthy. Tell the user:
 
   ```
