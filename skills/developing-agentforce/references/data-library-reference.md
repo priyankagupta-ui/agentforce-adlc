@@ -217,7 +217,7 @@ If `sf` is missing, do NOT auto-install. Offer:
 - npm (Node 20+): `npm install -g @salesforce/cli`
 - `.pkg` installer: https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_cli.htm
 
-Minimum version: `@salesforce/cli 2.138.6` (includes ADL commands). Check with `sf --version`.
+Minimum version: `@salesforce/cli 2.139.6` (includes ADL commands). Check with `sf --version`.
 
 Confirm the target org is authenticated:
 
@@ -570,7 +570,7 @@ Add this `actions:` block at the same level as `reasoning:` (still inside `subag
 
 ### 4. Reuse an existing library
 
-When modifying an existing agent: if the `.agent` already has a `knowledge:` block with a populated `rag_feature_config_id`, skip provisioning and reuse. Confirm the underlying library is still indexed by querying its detail endpoint (`GET /einstein/data-libraries/<libraryId>`) and checking `retrieverId` is present.
+When modifying an existing agent: if the `.agent` already has a `knowledge:` block with a populated `rag_feature_config_id`, skip provisioning and reuse. Confirm the underlying library is still indexed by running `sf agent adl get -i <libraryId>` and checking `retrieverId` is present.
 
 A complete minimal template lives at `assets/agents/knowledge-grounded.agent`.
 
@@ -635,12 +635,10 @@ If the assignment lands but grounded queries still return empty results, also ch
 
 ## Common pitfalls
 
-- `INVALID_SESSION_ID` mid-flow → access token expired. Re-fetch with `sf org display`.
+- `INVALID_SESSION_ID` mid-flow → access token expired. Re-authenticate with `sf org login web`.
 - `LightningDomain` login error → use the `*.my.salesforce.com` domain, not `*.lightning.force.com`.
-- Step 4 returns 403 → a header from step 3 was dropped or reordered — forward them all exactly.
-- `groundingFileRefs` empty right after Step 5 → indexing isn't done yet. Wait for Step 6 to populate `retrieverId`.
-- Top-level `status` stuck on `IN_PROGRESS` with all sub-stages `SUCCESS` → normal. Top-level lag of 10–30 minutes is common (longer for large files). **Do not block on it.** Use `retrieverId is not null` as the readiness gate.
-- Step 5 returns `INVALID_REQUEST_STATE: "One or more files have not been uploaded..."` despite a successful S3 200 → the org's `bypass-s3-file-exist` gate hasn't rolled out. Skip ADL on this pass; the user can upload via the Setup UI later.
+- `sf agent adl upload` fails with `"One or more files have not been uploaded..."` → the org's `bypass-s3-file-exist` gate hasn't rolled out. Skip ADL on this pass; the user can upload via the Setup UI later.
+- `sf agent adl get` shows top-level `status` stuck on `IN_PROGRESS` with all sub-stages `SUCCESS` → normal. Top-level lag of 10–30 minutes is common (longer for large files). **Do not block on it.** Use `retrieverId is not null` as the readiness gate.
 - `.agent` validation fails with `unresolved reference @knowledge.rag_feature_config_id` → the top-level `knowledge:` block is missing or misordered. It must precede `language:` per Core Language Section 2.
 - Agent published, ADL indexed (`retrieverId` populated), but every grounded query returns empty `knowledgeSummary` and the agent refuses → Einstein Agent User lacks Data Cloud access. See "Wiring → Permission prerequisite" above and [Agent User Setup, Step 3b](agent-user-setup.md).
 - `"To create a File data library, enable Agentforce in your org. Required org preferences: EinsteinGPTPlatformEnabled, AgentPlatformEnabled"` → Deploy both `EinsteinGpt.settings-meta.xml` AND `AgentPlatform.settings-meta.xml`. See [Org Setup for ADL](org-setup-for-adl.md) Steps 0a and 0b2.

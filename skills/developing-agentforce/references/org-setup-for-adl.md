@@ -44,7 +44,7 @@ Before starting, verify:
 sf --version --json
 ```
 
-Minimum version: `@salesforce/cli 2.138.6`. If missing, offer install options but do NOT auto-install.
+Minimum version: `@salesforce/cli 2.139.6`. If missing, offer install options but do NOT auto-install.
 
 ### 2. Org is authenticated
 
@@ -202,10 +202,10 @@ sf data create record --sobject PermissionSetAssignment --target-org $TARGET_ORG
 ### 0h. Verify assignments
 
 ```bash
-sf data query --target-org $TARGET_ORG --json -q "SELECT PermissionSet.Name FROM PermissionSetAssignment WHERE AssigneeId = '<adminUserId>' AND PermissionSet.Name IN ('DataCloudArchitect', 'PromptTemplateManager', 'CopilotSalesforceAdmin')"
+sf data query --target-org $TARGET_ORG --json -q "SELECT PermissionSet.Name FROM PermissionSetAssignment WHERE AssigneeId = '<adminUserId>' AND PermissionSet.Name IN ('GenieAdmin', 'CopilotSalesforceAdmin')"
 ```
 
-All three should appear in the results. If the org shows a "Data Cloud standard permission sets have changed" banner in Setup, acknowledge it — Salesforce periodically updates DC permset structures.
+Both should appear in the results (plus `PromptTemplateManager` if 0f was run). If the org shows a "Data Cloud standard permission sets have changed" banner in Setup, acknowledge it — Salesforce periodically updates DC permset structures.
 
 ---
 

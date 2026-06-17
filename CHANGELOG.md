@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- KNOWLEDGE (Knowledge Article Library) and RETRIEVER (Custom Retriever Library) source type support in `data-library-reference.md`, completing all three ADL source types.
+- `org-setup-for-adl.md` — fresh org configuration reference (platform settings, admin permsets, Knowledge enablement, agent-user runtime perms, language alignment).
+- Anti-hallucination guard instruction fix in `knowledge-grounded.agent` — "ALWAYS call the action FIRST" now precedes the empty-check, preventing planner short-circuit.
+
+### Changed
+- All ADL operations now use `sf agent adl` CLI commands exclusively. Removed raw Connect API paths, OpenAPI spec (`adl-api-spec.yaml`), and curl-based Appendix.
+- `SKILL.md` ADL orchestration steps updated to reference CLI commands (`sf agent adl list`, `sf agent adl create`, `sf agent adl get`) instead of REST endpoints.
+- Permission prerequisites expanded into 4 sub-sections (DC permset, Knowledge FLS, language alignment, Data Space scope) with deploy examples.
+- Added "inspect file content" instruction — skill should read the PDF, not ask the user to describe it.
+
+### Removed
+- `assets/adl-api-spec.yaml` — 941-line OpenAPI spec replaced by CLI command reference.
+
 ## [0.6.1] — 2026-05-19
 
 ### Changed

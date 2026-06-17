@@ -33,7 +33,6 @@ developing-agentforce/
 │   ├── data-library-reference.md
 │   ├── ... (additional references)
 ├── assets/                     # Templates, examples, and reusable snippets
-│   ├── adl-api-spec.yaml
 │   ├── agent-spec-template.md
 │   ├── bundle-meta.xml
 │   ├── invocable-apex-template.cls
